@@ -5,7 +5,8 @@
   "scripts": {
     "start": "ts-node src/index.ts",
     "dev": "nodemon src/index.ts",
-    "build": "tsc",
+    "build": "prisma generate && tsc",
+    "vercel-build": "prisma generate && tsc",
     "lint": "eslint .",
     "lint:fix": "eslint --fix .",
     "prisma:generate": "prisma generate",
@@ -31,6 +32,7 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
+    "http-errors": "^2.0.0",
     "morgan": "^1.10.1"
   },
   "devDependencies": {
@@ -39,6 +41,7 @@
     "@types/dotenv": "^6.1.1",
     "@types/express": "^5.0.3",
     "@types/helmet": "^0.0.48",
+    "@types/http-errors": "^2.0.4",
     "@types/morgan": "^1.9.10",
     "eslint": "^9.35.0",
     "nodemon": "^3.1.10",

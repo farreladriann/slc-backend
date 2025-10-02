@@ -35,7 +35,7 @@ app.post('/users', async (req: Request, res: Response, next: NextFunction) => {
     if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
       return res.status(409).json({ message: 'userEmail sudah ada' });
     }
-    return next(err);
+    return next(err instanceof Error ? err : new Error(String(err)));
   }
 });
 
@@ -56,29 +56,35 @@ app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
   }
 });
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
+// Export untuk Vercel serverless
+export default app;
 
-process.on('uncaughtException', (err) => {
-  console.error('Uncaught Exception:', err);
-});
+// Jalankan server lokal jika bukan di Vercel
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
 
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-});
+  process.on('uncaughtException', (err) => {
+    console.error('Uncaught Exception:', err);
+  });
 
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  });
 
-async function shutdown() {
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+
+  async function shutdown() {
     try {
-        console.log('Shutting down server...');
-        await prisma.$disconnect();
-        console.log('Database connection closed.');
-        process.exit(0);
+      console.log('Shutting down server...');
+      await prisma.$disconnect();
+      console.log('Database connection closed.');
+      process.exit(0);
     } catch (err) {
-        console.error('Error during shutdown:', err);
-        process.exit(1);
+      console.error('Error during shutdown:', err);
+      process.exit(1);
     }
+  }
 }
