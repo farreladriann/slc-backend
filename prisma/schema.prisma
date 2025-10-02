@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// Enums
+enum Stm32Mode {
+  Otomatis
+  Manual
+}
+
+enum TerminalStatus {
+  off
+  on
+}
+
+// Models
+model User {
+  userGoogleId String  @id @db.VarChar
+  userEmail    String  @unique @db.VarChar
+  userName     String  @db.VarChar
+
+  // Relations
+  stm32Id String? @db.VarChar
+  stm32   Stm32?  @relation(fields: [stm32Id], references: [stm32Id], onDelete: SetNull)
+
+  @@map("users")
+}
+
+model Stm32 {
+  stm32Id         String     @id @db.VarChar
+  stm32Threshold  Int?
+  mode            Stm32Mode
+
+  // Relations
+  users     User[]
+  terminals Terminal[]
+
+  @@map("stm32")
+}
+
+model Terminal {
+  terminalId       String         @id @db.VarChar
+  stm32Id          String         @db.VarChar
+  terminalPriority Int            @default(0)
+  terminalStatus   TerminalStatus
+  startOn          DateTime?
+  finishOn         DateTime?
+
+  // Relations
+  stm32       Stm32       @relation(fields: [stm32Id], references: [stm32Id], onDelete: Cascade)
+  powerUsages PowerUsage[]
+
+  @@index([stm32Id])
+  @@map("terminals")
+}
+
+model PowerUsage {
+  powerUsageId String   @id @db.VarChar
+  terminalId   String   @db.VarChar
+  power        Float
+  ampere       Float
+  volt         Float
+  timestamp    DateTime @default(now())
+
+  // Relations
+  terminal Terminal @relation(fields: [terminalId], references: [terminalId], onDelete: Cascade)
+
+  @@index([terminalId])
+  @@map("powerUsage")
+}

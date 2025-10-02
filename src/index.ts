@@ -1,0 +1,84 @@
+import express, { Application, NextFunction, Request, Response } from 'express';
+import path from 'path';
+import dotenv from 'dotenv';
+dotenv.config({ path: path.resolve(__dirname, '../.env') });
+import bodyParser from 'body-parser';
+import morgan from 'morgan';
+import createHttpError from 'http-errors';
+import helmet from 'helmet';
+import { prisma, Prisma } from './lib/prisma';
+
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
+const app: Application = express();
+
+app.use(bodyParser.json());
+app.use(bodyParser.urlencoded({ extended: true }));
+app.use(morgan('dev'));
+app.use(helmet());
+
+app.post('/users', async (req: Request, res: Response, next: NextFunction) => {
+  const { userGoogleId, userEmail, userName, stm32Id } = req.body ?? {};
+  if (!userGoogleId || !userEmail || !userName) {
+    return res.status(400).json({ message: 'userGoogleId, userEmail, userName wajib' });
+  }
+  try {
+    const user = await prisma.user.create({
+      data: {
+        userGoogleId,
+        userEmail,
+        userName,
+        ...(stm32Id ? { stm32Id } : {}),
+      },
+    });
+    return res.status(201).json(user);
+  } catch (err) {
+    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+      return res.status(409).json({ message: 'userEmail sudah ada' });
+    }
+    return next(err);
+  }
+});
+
+app.use((_req: Request, _res: Response, next: NextFunction) => {
+  next(createHttpError(404, 'Not Found'));
+});
+
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
+  if (err instanceof createHttpError.HttpError) {
+    const httpError = err as createHttpError.HttpError;
+    res.status(httpError.status).json({ message: httpError.message });
+  } else {
+    console.error(err);
+    res.status(500).json({
+      message: err.message.length > 40 ? 'Internal Server Error' : err.message,
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+});
+
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
+
+async function shutdown() {
+    try {
+        console.log('Shutting down server...');
+        await prisma.$disconnect();
+        console.log('Database connection closed.');
+        process.exit(0);
+    } catch (err) {
+        console.error('Error during shutdown:', err);
+        process.exit(1);
+    }
+}
