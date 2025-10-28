@@ -27,26 +27,33 @@
   "description": "Smart Load Controller Backend",
   "dependencies": {
     "@prisma/client": "^6.16.2",
+    "@supabase/supabase-js": "^2.76.1",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.2",
+    "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "http-errors": "^2.0.0",
-    "morgan": "^1.10.1"
+    "morgan": "^1.10.1",
+    "mqtt": "^5.14.1",
+    "uuid": "^13.0.0"
   },
   "devDependencies": {
     "@types/body-parser": "^1.19.6",
     "@types/cors": "^2.8.19",
     "@types/dotenv": "^6.1.1",
-    "@types/express": "^5.0.3",
+    "@types/express": "^5.0.4",
     "@types/helmet": "^0.0.48",
     "@types/http-errors": "^2.0.4",
     "@types/morgan": "^1.9.10",
+    "@types/mqtt": "^0.0.34",
+    "@types/node": "^24.9.1",
+    "@types/uuid": "^10.0.0",
     "eslint": "^9.35.0",
     "nodemon": "^3.1.10",
     "prisma": "^6.16.2",
     "ts-node": "^10.9.2",
+    "ts-node-dev": "^2.0.0",
     "typescript": "^5.9.2"
   }
 }

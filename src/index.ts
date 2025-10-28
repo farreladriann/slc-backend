@@ -6,15 +6,30 @@ import bodyParser from 'body-parser';
 import morgan from 'morgan';
 import createHttpError from 'http-errors';
 import helmet from 'helmet';
+import cors from 'cors';
 import { prisma, Prisma } from './lib/prisma';
+import knapsackRoute from './routes/knapsackRoute';
+import { connectMqtt } from './services/mqttService';
+import terminalRoute from './routes/terminalRoute';
+
+
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
-const app: Application = express();
+const app = express();
 
+
+app.use(cors());
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(morgan('dev'));
 app.use(helmet());
+
+// register routes
+app.use('/api/terminals', terminalRoute);
+app.use('/api/knapsack', knapsackRoute);
+
+connectMqtt(); //connect MQTT sekali saat server start
+
 
 app.post('/users', async (req: Request, res: Response, next: NextFunction) => {
   const { userGoogleId, userEmail, userName, stm32Id } = req.body ?? {};
@@ -31,11 +46,20 @@ app.post('/users', async (req: Request, res: Response, next: NextFunction) => {
       },
     });
     return res.status(201).json(user);
-  } catch (err) {
-    if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+  } catch (err: unknown) {
+    // Cek apakah error dari Prisma dan memiliki properti "code"
+    if (
+      err instanceof Prisma.PrismaClientKnownRequestError &&
+      (err as Prisma.PrismaClientKnownRequestError).code === 'P2002'
+    ) {
       return res.status(409).json({ message: 'userEmail sudah ada' });
     }
-    return next(err instanceof Error ? err : new Error(String(err)));
+    // Jika error umum
+    if (err instanceof Error) {
+      return next(err);
+    }
+    // Jika bukan instance dari Error
+    return next(new Error(String(err)));
   }
 });
 
