@@ -115,4 +115,57 @@ router.post('/:id/set', async (req, res) => {
     }
     });
 
+
+    router.post('/savePrioritiesAutoFill', async (req, res) => {
+    try {
+      const body = req.body as Record<string, number | null>;
+      // body example: { terminal_1:1, terminal_3:3 }
+
+      const all = await prisma.terminal.findMany();
+      const ids = all.map(t => t.terminalId);
+
+      // list priority yg sudah dipakai
+      const used = Object.values(body).filter(v => v != null) as number[];
+      const allNumbers = [1,2,3,4];
+
+      // buang yg sudah dipakai
+      const remaining = allNumbers.filter(n => !used.includes(n));
+
+      // terminal yg belum diisi
+      const emptyIds = ids.filter(id => body[id] == null);
+
+      // assign random sisa ke empty
+      remaining.sort(()=> Math.random() - 0.5);
+      emptyIds.forEach((id,i)=>{
+        body[id] = remaining[i];
+      });
+
+      // now update DB
+      for (const id of ids) {
+        await prisma.terminal.update({
+          where: { terminalId: id },
+          data: { terminalPriority: Number(body[id]) }
+        });
+      }
+
+      return res.json({message:"saved OK", body});
+    } catch(e:any){
+      console.log(e);
+      return res.status(500).json({message:e.message});
+    }
+  });
+
+  router.post('/resetPriorities', async (req, res) => {
+    try{
+      await prisma.terminal.updateMany({
+        data: { terminalPriority: 0 }
+      });
+      return res.json({message:"reset OK"});
+    }catch(e:any){
+      return res.status(500).json({message:e.message});
+    }
+  });
+
+
+
 export default router;
