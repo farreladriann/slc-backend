@@ -1,4 +1,4 @@
-import { PrismaClient, Prisma } from '../generated/prisma';
+import { PrismaClient, Prisma } from '@prisma/client';
 
 // Reuse koneksi saat dev (nodemon)
 declare global {
