@@ -4,7 +4,7 @@ import { prisma } from '../lib/prisma';
 import { getLatestPowerForAll, insertKnapsackLog } from '../services/supabaseService';
 import { runKnapsack } from '../services/knapsackService';
 import { publishBatchControl } from '../services/mqttService';
-import { v4 as uuidv4 } from 'uuid';
+import { startLoop, stopLoop, isRunning as knapIsRunning } from '../services/knapsackManager';
 
 const router = Router();
 
@@ -30,7 +30,7 @@ router.post('/terminals/updatePriority', async (req: Request, res: Response) => 
   }
 });
 
-// Run knapsack algorithm
+// Run knapsack algorithm once (on-demand)
 router.post('/run', async (req: Request, res: Response) => {
   try {
     const { maxCapacity, mode } = req.body;
@@ -100,6 +100,41 @@ router.post('/run', async (req: Request, res: Response) => {
     console.error('❌ Error running knapsack:', err);
     return res.status(500).json({ message: err.message ?? 'Internal error' });
   }
+});
+
+/**
+ * Start continuous knapsack loop
+ * body: { intervalMs?: number }
+ */
+router.post('/start', async (req: Request, res: Response) => {
+  try {
+    const intervalMs = Number(req.body?.intervalMs) || 5000;
+    const out = await startLoop(intervalMs);
+    return res.status(200).json({ running: true, info: out });
+  } catch (err: any) {
+    console.error('start knapsack err', err);
+    return res.status(500).json({ message: 'Failed to start', error: err.message });
+  }
+});
+
+/**
+ * Stop continuous knapsack loop
+ */
+router.post('/stop', async (_req: Request, res: Response) => {
+  try {
+    const out = await stopLoop();
+    return res.status(200).json({ running: false, info: out });
+  } catch (err: any) {
+    console.error('stop knapsack err', err);
+    return res.status(500).json({ message: 'Failed to stop', error: err.message });
+  }
+});
+
+/**
+ * Status endpoint
+ */
+router.get('/status', (_req: Request, res: Response) => {
+  return res.status(200).json({ running: knapIsRunning() });
 });
 
 export default router;
