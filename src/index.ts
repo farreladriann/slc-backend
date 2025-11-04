@@ -11,7 +11,7 @@ import { prisma, Prisma } from './lib/prisma';
 import knapsackRoute from './routes/knapsackRoute';
 import { connectMqtt } from './services/mqttService';
 import terminalRoute from './routes/terminalRoute';
-
+import scheduleRoute from './routes/scheduleRoute';
 
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
@@ -27,6 +27,9 @@ app.use(helmet());
 // register routes
 app.use('/api/terminals', terminalRoute);
 app.use('/api/knapsack', knapsackRoute);
+
+// schedule route
+app.use('/api/schedule', scheduleRoute);
 
 connectMqtt(); //connect MQTT sekali saat server start
 
