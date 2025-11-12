@@ -128,7 +128,6 @@ export async function updateTerminalStatus(terminalId: string, status: string) {
  * Insert power usage record
  */
 export async function insertPowerUsage(payload: {
-  powerUsageId: string;
   terminalId: string;
   power: number;
   ampere?: number | null;
@@ -136,7 +135,6 @@ export async function insertPowerUsage(payload: {
   timestamp?: string;
 }) {
   const row = {
-    powerUsageId: payload.powerUsageId,
     terminalId: payload.terminalId,
     power: payload.power,
     ampere: payload.ampere ?? null,
