@@ -9,10 +9,10 @@ import helmet from 'helmet';
 import cors from 'cors';
 import { prisma, Prisma } from './lib/prisma';
 import knapsackRoute from './routes/knapsackRoute';
-import { connectMqtt } from './services/mqttService';
+import { connectMqtt, onMqttConnected } from './services/mqttService';
 import terminalRoute from './routes/terminalRoute';
 import scheduleRoute from './routes/scheduleRoute';
-
+import { startScheduleWatcher } from './services/scheduleManager';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const app = express();
@@ -31,7 +31,14 @@ app.use('/api/knapsack', knapsackRoute);
 // schedule route
 app.use('/api/schedule', scheduleRoute);
 
-connectMqtt(); //connect MQTT sekali saat server start
+// Jalankan koneksi MQTT
+connectMqtt();
+
+// Jalankan schedule watcher **setelah MQTT berhasil connect**
+onMqttConnected(() => {
+  console.log('🚀 MQTT connected → starting schedule watcher...');
+  startScheduleWatcher(30_000); // cek tiap 30 detik
+});
 
 
 app.post('/users', async (req: Request, res: Response, next: NextFunction) => {

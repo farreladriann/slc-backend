@@ -1,107 +1,104 @@
 // src/services/mqttService.ts
 import mqtt, { MqttClient } from 'mqtt';
 import dotenv from 'dotenv';
-import { supabase, insertPowerUsage, updateTerminalStatus } from './supabaseService';
-import crypto from 'crypto';
+import { insertPowerUsage, updateTerminalStatus } from './supabaseService';
 
 dotenv.config();
 
-const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://test.mosquitto.org:1883';
-const MQTT_USERNAME = process.env.MQTT_USERNAME || undefined;
-const MQTT_PASSWORD = process.env.MQTT_PASSWORD || undefined;
-export const MQTT_TOPIC_PREFIX = process.env.MQTT_TOPIC_PREFIX || 'slc/device';
+// MQTT CONFIGURATION
+const MQTT_BROKER_URL = process.env.MQTT_BROKER_URL || 'mqtt://i6440f9b.ala.dedicated.aws.emqxcloud.com:1883';
+const MQTT_USERNAME = process.env.MQTT_USERNAME || 'BagasGanteng';
+const MQTT_PASSWORD = process.env.MQTT_PASSWORD || 'BagasGanteng';
+
+// Topic mapping
+const TOPIC_UPSTREAM = process.env.MQTT_TOPIC_UPSTREAM || 'stm32/data/upstream';      // from STM32 → backend
+const TOPIC_DOWNSTREAM = process.env.MQTT_TOPIC_DOWNSTREAM || 'stm32/data/downstream'; // from backend → STM32
+const MQTT_TOPIC_PREFIX = process.env.MQTT_TOPIC_PREFIX || 'stm32/data';
+
 
 let client: MqttClient | null = null;
 
+let mqttConnectedCallback: (() => void) | null = null;
+
+export function onMqttConnected(cb: () => void) {
+  mqttConnectedCallback = cb;
+}
+
+
+/**
+ * Connect to MQTT broker
+ */
 export function connectMqtt() {
   client = mqtt.connect(MQTT_BROKER_URL, {
-    username: MQTT_USERNAME || undefined,
-    password: MQTT_PASSWORD || undefined,
+    username: MQTT_USERNAME,
+    password: MQTT_PASSWORD,
     reconnectPeriod: 3000,
     clientId: `slc-backend-${Math.floor(Math.random() * 100000)}`,
   });
 
   client.on('connect', () => {
-    console.log(`MQTT connected: ${MQTT_BROKER_URL}`);
-    client!.subscribe(`${MQTT_TOPIC_PREFIX}/status/#`, { qos: 1 }, (err) => {
-      if (!err) console.log(`Subscribed to: ${MQTT_TOPIC_PREFIX}/status/#`);
-    });
+  console.log(`✅ MQTT connected: ${MQTT_BROKER_URL}`);
+  client!.subscribe(TOPIC_UPSTREAM, { qos: 1 }, (err) => {
+    if (!err) console.log(`Subscribed to: ${TOPIC_UPSTREAM}`);
   });
 
-  client.on('error', (err) => console.error('MQTT Error:', err?.message ?? err));
-  client.on('close', () => console.log('MQTT disconnected, reconnecting...'));
+  // 🔔 Jalankan callback kalau ada
+  if (mqttConnectedCallback) {
+    mqttConnectedCallback();
+  }
+});
 
+  client.on('error', (err) => console.error('❌ MQTT Error:', err?.message ?? err));
+  client.on('close', () => console.warn('⚠️ MQTT disconnected, reconnecting...'));
+
+  /**
+   * Handle incoming message from STM32 (upstream)
+   */
   client.on('message', async (topic, message) => {
-    try {
-      const payloadStr = message.toString();
-      console.log(`[MQTT] ${topic} => ${payloadStr}`);
+  if (topic !== TOPIC_UPSTREAM) return;
 
-      const parts = topic.split('/');
-      // expected topic: slc/device/status/<terminalId>
-      const category = parts[2];
-      const terminalId = parts[3];
+  try {
+    const payload = JSON.parse(message.toString());
+    console.log(`[MQTT] 🔼 UPSTREAM DATA =>`, payload);
 
-      if (category === 'status' && terminalId) {
-        // Try parse JSON telemetry; fallback to plain "on"/"off"
-        let parsed: any = null;
-        try {
-          parsed = JSON.parse(payloadStr);
-        } catch (_) {
-          parsed = null;
-        }
+    // Bisa berupa array dari STM32
+    const dataArray = Array.isArray(payload) ? payload : [payload];
 
-        if (parsed && typeof parsed === 'object' && (parsed.power !== undefined || parsed.status)) {
-          // telemetry object expected:
-          // { "status":"on", "power":125.4, "ampere":0.54, "volt":230.1, "timestamp":"..." }
-          const ts = parsed.timestamp ?? new Date().toISOString();
-          const power = Number(parsed.power ?? 0);
-          const ampere = parsed.ampere ?? null;
-          const volt = parsed.volt ?? null;
-          const status = String(parsed.status ?? '').toLowerCase() === 'on' ? 'on' : 'off';
+    for (const d of dataArray) {
+      const term = `terminal_${d.terminal_id}`;
+      const status = d.relay_status === 1 ? 'on' : 'off';
 
-          // insert power usage
-          try {
-            await insertPowerUsage({
-              powerUsageId: crypto.randomUUID(),
-              terminalId,
-              power,
-              ampere,
-              volt,
-              timestamp: ts,
-            });
-          } catch (err) {
-            console.warn('insertPowerUsage failed:', err);
-          }
+      // insert ke powerUsage
+      await insertPowerUsage({
+        terminalId: term,
+        power: Number(d.power),
+        ampere: Number(d.current),
+        volt: Number(d.voltage),
+        timestamp: new Date().toISOString(),
+      });
 
-          // update terminal status
-          try {
-            await updateTerminalStatus(terminalId, status);
-            console.log(`Terminal ${terminalId} updated to status ${status}`);
-          } catch (err) {
-            console.warn('updateTerminalStatus failed:', err);
-          }
-        } else {
-          // payload is simple string like "on" or "off"
-          const newStatus = payloadStr.trim().toLowerCase() === 'on' ? 'on' : 'off';
-          try {
-            await updateTerminalStatus(terminalId, newStatus);
-            console.log(`Terminal ${terminalId} updated to status ${newStatus}`);
-          } catch (err) {
-            console.warn('updateTerminalStatus failed:', err);
-          }
-        }
-      }
-    } catch (err) {
-      console.error('Error processing MQTT message:', err);
+      // update status terminal
+      await updateTerminalStatus(term, status);
+      console.log(`✅ Saved powerUsage + updated status for ${term} = ${status}`);
     }
-  });
+  } catch (err) {
+    console.error('❌ Error processing UPSTREAM message:', err);
+  }
+});
+
 }
 
-function publishPromise(topic: string, payload: string, opts: mqtt.IClientPublishOptions = { qos: 1, retain: false }, timeoutMs = 5000) {
+/**
+ * Publish helper with timeout
+ */
+function publishPromise(
+  topic: string,
+  payload: string,
+  opts: mqtt.IClientPublishOptions = { qos: 1, retain: false },
+  timeoutMs = 5000
+) {
   return new Promise<void>((resolve, reject) => {
-    if (!client || !client.connected) {
-      return reject(new Error('MQTT client not connected'));
-    }
+    if (!client || !client.connected) return reject(new Error('MQTT client not connected'));
     let called = false;
     const timer = setTimeout(() => {
       if (!called) {
@@ -115,38 +112,41 @@ function publishPromise(topic: string, payload: string, opts: mqtt.IClientPublis
       called = true;
       clearTimeout(timer);
       if (err) return reject(err);
-      return resolve();
+      resolve();
     });
   });
 }
 
 /**
- * Publish a batch of controls. Each command targets a terminalId.
- * Topic used: `${MQTT_TOPIC_PREFIX}/control/<terminalId>`
- * Payload is plain 'on' or 'off' (ke perangkat) — STM32 firmware expected to parse that.
+ * Publish batch control commands to downstream topic
+ * Example payload: { "terminal_id": 1, "relay": 1, "id": 100 }
  */
 export async function publishBatchControl(commands: { terminalId: string; status: 'on' | 'off' }[]) {
   const results: { terminalId: string; ok: boolean; error?: string }[] = [];
+
   for (const cmd of commands) {
-    const topic = `${MQTT_TOPIC_PREFIX}/control/${cmd.terminalId}`;
     try {
-      await publishPromise(topic, cmd.status, { qos: 1, retain: false }, 5000);
-      console.log(`Published to ${topic}: ${cmd.status}`);
+      // convert "terminal_1" -> 1
+      const idMatch = /^terminal_(\d+)$/.exec(cmd.terminalId);
+      const terminalIdNum = idMatch ? Number(idMatch[1]) : 0;
+
+      // build payload sesuai hardware request
+      const payloadObj = {
+        terminal_id: terminalIdNum,
+        relay: cmd.status === 'on' ? 1 : 0,
+        id: Math.floor(Math.random() * 1000), // random id untuk identifikasi pesan
+      };
+
+      await publishPromise(TOPIC_DOWNSTREAM, JSON.stringify(payloadObj), { qos: 1, retain: false }, 5000);
+
+      console.log(`📤 Published to ${TOPIC_DOWNSTREAM}:`, payloadObj);
       results.push({ terminalId: cmd.terminalId, ok: true });
     } catch (err: any) {
-      console.error(`Failed publish ${topic}:`, err?.message ?? err);
+      console.error(`❌ Failed publish for ${cmd.terminalId}:`, err?.message ?? err);
       results.push({ terminalId: cmd.terminalId, ok: false, error: String(err?.message ?? err) });
     }
   }
+
   return results;
 }
 
-export async function disconnectMqtt() {
-  if (!client) return;
-  return new Promise<void>((resolve) => {
-    client!.end(true, {}, () => {
-      console.log('MQTT client disconnected');
-      resolve();
-    });
-  });
-}
