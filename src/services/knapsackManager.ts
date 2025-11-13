@@ -14,9 +14,9 @@ export function isRunning() {
 
 /**
  * startLoop: jalankan knapsack setiap `intervalMs` milidetik.
- * intervalMs default 30000.
+ * intervalMs default 15 detik.
  */
-export async function startLoop(intervalMs = 30000) {
+export async function startLoop(intervalMs = 15000) {
   if (_running) return { started: false, message: 'already running' };
   _running = true;
 

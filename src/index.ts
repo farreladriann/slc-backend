@@ -13,6 +13,7 @@ import { connectMqtt, onMqttConnected } from './services/mqttService';
 import terminalRoute from './routes/terminalRoute';
 import scheduleRoute from './routes/scheduleRoute';
 import { startScheduleWatcher } from './services/scheduleManager';
+import statisticsRoute from './routes/statisticsRoute';
 
 const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 const app = express();
@@ -30,6 +31,9 @@ app.use('/api/knapsack', knapsackRoute);
 
 // schedule route
 app.use('/api/schedule', scheduleRoute);
+
+//rekap statistik route
+app.use('/api/statistics', statisticsRoute);
 
 // Jalankan koneksi MQTT
 connectMqtt();
