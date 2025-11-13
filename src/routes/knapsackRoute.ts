@@ -108,7 +108,7 @@ router.post('/run', async (req: Request, res: Response) => {
  */
 router.post('/start', async (req: Request, res: Response) => {
   try {
-    const intervalMs = Number(req.body?.intervalMs) || 5000;
+    const intervalMs = Number(req.body?.intervalMs) || 60000;
     const out = await startLoop(intervalMs);
     return res.status(200).json({ running: true, info: out });
   } catch (err: any) {
