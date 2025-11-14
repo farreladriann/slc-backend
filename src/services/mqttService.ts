@@ -117,11 +117,20 @@ function publishPromise(
   });
 }
 
+
+function delay(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+
 /**
  * Publish batch control commands to downstream topic
- * Example payload: { "terminal_id": 1, "relay": 1, "id": 100 }
+ * with safe delay (200ms) between each message
  */
-export async function publishBatchControl(commands: { terminalId: string; status: 'on' | 'off' }[]) {
+export async function publishBatchControl(
+  commands: { terminalId: string; status: 'on' | 'off' }[],
+  delayMs = 3000   // you can change this to 150–300ms
+) {
   const results: { terminalId: string; ok: boolean; error?: string }[] = [];
 
   for (const cmd of commands) {
@@ -130,23 +139,38 @@ export async function publishBatchControl(commands: { terminalId: string; status
       const idMatch = /^terminal_(\d+)$/.exec(cmd.terminalId);
       const terminalIdNum = idMatch ? Number(idMatch[1]) : 0;
 
-      // build payload sesuai hardware request
+      // payload sesuai permintaan STM32
       const payloadObj = {
         terminal_id: terminalIdNum,
         relay: cmd.status === 'on' ? 1 : 0,
-        id: Math.floor(Math.random() * 1000), // random id untuk identifikasi pesan
+        id: Math.floor(Math.random() * 1000),
       };
 
-      await publishPromise(TOPIC_DOWNSTREAM, JSON.stringify(payloadObj), { qos: 1, retain: false }, 5000);
+      // publish ke MQTT
+      await publishPromise(
+        TOPIC_DOWNSTREAM,
+        JSON.stringify(payloadObj),
+        { qos: 1, retain: false },
+        5000
+      );
 
       console.log(`📤 Published to ${TOPIC_DOWNSTREAM}:`, payloadObj);
       results.push({ terminalId: cmd.terminalId, ok: true });
+
+      // 🔥 delay antar command agar STM32 tidak overload
+      await delay(delayMs);
+
     } catch (err: any) {
       console.error(`❌ Failed publish for ${cmd.terminalId}:`, err?.message ?? err);
-      results.push({ terminalId: cmd.terminalId, ok: false, error: String(err?.message ?? err) });
+      results.push({
+        terminalId: cmd.terminalId,
+        ok: false,
+        error: err?.message ?? String(err)
+      });
     }
   }
 
   return results;
 }
+
 
