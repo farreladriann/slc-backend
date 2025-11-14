@@ -129,7 +129,7 @@ function delay(ms: number) {
  */
 export async function publishBatchControl(
   commands: { terminalId: string; status: 'on' | 'off' }[],
-  delayMs = 3000   // you can change this to 150–300ms
+  delayMs = 7000   // you can change this to 150–300ms
 ) {
   const results: { terminalId: string; ok: boolean; error?: string }[] = [];
 
