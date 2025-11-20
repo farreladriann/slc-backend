@@ -54,18 +54,36 @@ router.get('/', async (req: Request, res: Response) => {
     // SUMMARY (HANYA periode saat ini)
     // =========================================
     const terminalSummary = await prisma.$queryRaw<
-      { terminalid: string; sum_power: number }[]
+      { terminalid: string; kwh: number }[]
     >`
-      SELECT "terminalId" AS terminalid, SUM(power) AS sum_power
-      FROM "powerUsage"
-      WHERE "timestamp" >= ${summaryStartIso}::timestamptz
-        AND "timestamp" <= ${nowIso}::timestamptz
+      WITH ordered_data AS (
+        SELECT 
+          "terminalId",
+          power, 
+          "timestamp",
+          -- Ambil waktu data berikutnya untuk menghitung durasi
+          LEAD("timestamp") OVER (PARTITION BY "terminalId" ORDER BY "timestamp") as next_ts
+        FROM "powerUsage"
+        WHERE "timestamp" >= ${summaryStartIso}::timestamptz
+          AND "timestamp" <= ${nowIso}::timestamptz
+      ),
+      calculated_energy AS (
+        SELECT
+          "terminalId",
+          -- Rumus: Power(Watt) * Durasi(Detik) / 3600(Jam) / 1000(Kilo)
+          -- Jika next_ts null (data terakhir), durasi dianggap 0 agar tidak error
+          (power * EXTRACT(EPOCH FROM (COALESCE(next_ts, "timestamp") - "timestamp")) / 3600.0 / 1000.0) as segment_kwh
+        FROM ordered_data
+      )
+      SELECT "terminalId" AS terminalid, SUM(segment_kwh) AS kwh
+      FROM calculated_energy
       GROUP BY "terminalId"
     `;
 
+    // Mapping hasil query baru (kolomnya sudah 'kwh', bukan 'sum_power' lagi)
     const terminals = terminalSummary.map((r) => ({
       terminalId: r.terminalid,
-      kwh: Number((r.sum_power ?? 0).toFixed(4)),
+      kwh: Number((r.kwh ?? 0).toFixed(4)),
     }));
 
     const totalKwh = terminals.reduce((s, t) => s + t.kwh, 0);
