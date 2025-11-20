@@ -51,65 +51,62 @@ router.get('/', async (req: Request, res: Response) => {
     const nowIso = now.toISOString();
 
     // =========================================
-    // SUMMARY (HANYA periode saat ini)
+    // SINGLE QUERY FOR CHART & SUMMARY
     // =========================================
-    const terminalSummary = await prisma.$queryRaw<
-      { terminalid: string; kwh: number }[]
+    // Mengambil data per terminal per periode (hari/bulan/tahun)
+    // Menggunakan window function LEAD untuk menghitung durasi (integral)
+    
+    const dateTruncUnit =
+      periodUnit === 'day' ? 'day' : periodUnit === 'month' ? 'month' : 'year';
+
+    const rawStats = await prisma.$queryRaw<
+      { terminalid: string; period: Date; kwh: number }[]
     >`
       WITH ordered_data AS (
         SELECT 
           "terminalId",
-          power, 
           "timestamp",
-          -- Ambil waktu data berikutnya untuk menghitung durasi
+          power,
           LEAD("timestamp") OVER (PARTITION BY "terminalId" ORDER BY "timestamp") as next_ts
         FROM "powerUsage"
-        WHERE "timestamp" >= ${summaryStartIso}::timestamptz
+        WHERE "timestamp" >= ${chartStartIso}::timestamptz
           AND "timestamp" <= ${nowIso}::timestamptz
       ),
       calculated_energy AS (
         SELECT
           "terminalId",
-          -- Rumus: Power(Watt) * Durasi(Detik) / 3600(Jam) / 1000(Kilo)
-          -- Jika next_ts null (data terakhir), durasi dianggap 0 agar tidak error
+          "timestamp",
+          -- Rumus kWh: (Watt * Durasi_Detik) / 3600 / 1000
           (power * EXTRACT(EPOCH FROM (COALESCE(next_ts, "timestamp") - "timestamp")) / 3600.0 / 1000.0) as segment_kwh
         FROM ordered_data
       )
-      SELECT "terminalId" AS terminalid, SUM(segment_kwh) AS kwh
+      SELECT 
+        "terminalId" AS terminalid,
+        date_trunc(${dateTruncUnit}, "timestamp") AS period,
+        SUM(segment_kwh) AS kwh
       FROM calculated_energy
-      GROUP BY "terminalId"
+      GROUP BY "terminalId", period
+      ORDER BY period
     `;
 
-    // Mapping hasil query baru (kolomnya sudah 'kwh', bukan 'sum_power' lagi)
-    const terminals = terminalSummary.map((r) => ({
+    // 1. PROSES SUMMARY (Periode saat ini saja)
+    // Filter data yang period-nya >= summaryStart
+    const summaryStats = rawStats.filter(
+      (r) => new Date(r.period).getTime() >= summaryStart.getTime()
+    );
+
+    const terminals = summaryStats.map((r) => ({
       terminalId: r.terminalid,
       kwh: Number((r.kwh ?? 0).toFixed(4)),
     }));
 
     const totalKwh = terminals.reduce((s, t) => s + t.kwh, 0);
 
-    // =============================================
-    // CHART DATA (periode panjang)
-    // =============================================
-    const dateTruncUnit =
-      periodUnit === 'day' ? 'day' : periodUnit === 'month' ? 'month' : 'year';
-
-    const chartAgg = await prisma.$queryRaw<
-      { period: Date; sum_power: number }[]
-    >`
-      SELECT date_trunc(${dateTruncUnit}, "timestamp") AS period,
-             SUM(power) AS sum_power
-      FROM "powerUsage"
-      WHERE "timestamp" >= ${chartStartIso}::timestamptz
-        AND "timestamp" <= ${nowIso}::timestamptz
-      GROUP BY period
-      ORDER BY period
-    `;
-
+    // 2. PROSES CHART (Agregasi semua terminal per periode)
     const map = new Map<string, number>();
 
-    chartAgg.forEach((e) => {
-      const d = new Date(e.period);
+    rawStats.forEach((r) => {
+      const d = new Date(r.period);
       let key = '';
 
       if (periodUnit === 'day') key = d.toISOString().slice(0, 10);
@@ -117,7 +114,8 @@ router.get('/', async (req: Request, res: Response) => {
         key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
       else key = `${d.getFullYear()}`;
 
-      map.set(key, Number((e.sum_power ?? 0).toFixed(4)));
+      const currentVal = map.get(key) ?? 0;
+      map.set(key, currentVal + Number(r.kwh));
     });
 
     const series = [];
