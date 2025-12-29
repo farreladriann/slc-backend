@@ -3,7 +3,7 @@
 <div align="center">
 
 ![TypeScript](https://img.shields.io/badge/TypeScript-007ACC?style=for-the-badge&logo=typescript&logoColor=white)
-![Express.js](https://img.shields.io/badge/Express. js-404D59?style=for-the-badge)
+![Express.js](https://img.shields.io/badge/Express.js-404D59?style=for-the-badge)
 ![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-316192?style=for-the-badge&logo=postgresql&logoColor=white)
 ![MQTT](https://img.shields.io/badge/MQTT-660099?style=for-the-badge&logo=mqtt&logoColor=white)
@@ -348,3 +348,4 @@ slc-backend/
 Made with ❤️ by Farrel Adrian
 
 </div>
+
