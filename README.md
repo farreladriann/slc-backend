@@ -49,7 +49,6 @@
 - ✅ **MQTT Integration** - Komunikasi real-time dengan STM32 microcontroller
 - ✅ **Scheduling System** - Penjadwalan otomatis on/off terminal
 - ✅ **Power Usage Monitoring** - Tracking real-time power, ampere, dan voltage
-- ✅ **User Management** - Manajemen user dengan Google OAuth
 - ✅ **Statistics & Analytics** - Laporan dan statistik penggunaan daya
 - ✅ **Mode Otomatis/Manual** - Fleksibilitas kontrol STM32
 
@@ -345,7 +344,6 @@ slc-backend/
 
 ⭐ **Jika proyek ini membantu, berikan star! ** ⭐
 
-Made with ❤️ by Farrel Adrian
-
 </div>
+
 
